@@ -11,6 +11,8 @@
   8 - ...SPREAD & ...REST
   9 - OBJECT LITERAL UPGRADES
   10 - PROMISES
+  11 - SYMBOLS
+  12 - CLASSES
  */
 //--------------------------------------------------------------------------------
 
@@ -129,7 +131,7 @@ const old = ages.filter(age => age >= 60);
 
 const box = document.querySelector('.box');
 // IMPORTANT NOTE: A regular function is used not an arrow function
-// - in an arrow function the 'this' is not rebound inside of this function nad use previous scope
+// - in an arrow function the 'this' is not rebound inside of this function and use previous scope
 box.addEventListener('click', function() {
   // ^^^ this is the <div.box> since box has called addEventListener.
   // variables are rebinded, use let
@@ -845,7 +847,380 @@ console.log(shirt);
 /*
   -----------------------------
   10 - PROMISES
+   - The Promise object represents the eventual completion (or failure)
+  of an asynchronous operation, and its resulting value. (often used with fetch)
+    - The Fetch API provides an interface for fetching resources
+   -A Promise is a proxy for a value not necessarily known when the promise is created
+  - A Promise is in one of these states:
+    - pending: initial state, neither fulfilled nor rejected.
+    - fulfilled: meaning that the operation completed successfully.
+    - rejected: meaning that the operation failed.
+  -----------------------------
+ */
+
+//--------------------------------------------------------------- INTRO
+
+// Fetch is similar to $.getJSON/$.ajax but native (no library)
+// - a promise is something that will happen between now and the future (asynchronous)
+// => fetch queues up the search but doesn't store the result (it owes it)
+// => Promise is listening the fetch
+// => .then is the callback function(s)
+// => the Promise returns the raw data (not a JSON)
+// => then console it
+
+// The fetch() method takes one mandatory argument, the path to the resource to fetch.
+const postsPromise = fetch('http://wesbos.com/wp-json/wp/v2/posts');
+// It returns a Promise that resolves to the Response to that request
+postsPromise
+  // return as a JSON
+  .then(data => data.json())
+  .then(data => { console.log(data) })
+  // catch any error (wrong URL for instance (500,404..))
+  .catch((err) => {
+    console.error(err);
+  });
+
+
+//--------------------------------------------------------------- SYNTAX TO BUILD A PROMISE
+
+// A Promise object is created using the new keyword and its constructor.
+// This constructor takes as its argument a function, called the "executor function".
+// This function should take two functions as parameters. (a Promise works or fails)
+//  - resolve: when the asynchronous task completes successfully and returns the results
+//  - reject: when the task fails, and returns the reason for failure (typically an error object)
+const promise = new Promise((resolve, reject) => {
+  setTimeout(() => {
+    // !! throw an Error object here (to see where the error happens)
+    reject(Error('Err wes isn\'t cool'));
+  }, 1000);
+});
+
+promise
+  .then(data => {
+    console.log(data);
+  })
+  .catch(err => {
+    console.error(err);
+  });
+
+
+//--------------------------------------------------------------- CHAINING PROMISES
+
+// Allow flow control, useful in nodejs (backend query DB)
+// Chaining gives clarity
+// => select an ID first to retrieve an article from separate tables
+const posts = [
+  { title: 'I love JavaScript', author: 'Wes Bos', id: 1 },
+];
+
+const authors = [
+  { name: 'Wes Bos', twitter: '@wesbos', bio: 'Canadian Developer' },
+];
+
+// Find the post from its ID
+function getPostById(id) {
+  // create a new promise
+  return new Promise((resolve, reject) => {
+    // using a settimeout to mimick a databse
+    setTimeout(() => {
+      // find the post we want
+      const post = posts.find(post => post.id === id);
+      if(post) {
+        resolve(post); // send the post back
+      } else {
+        reject(Error('No Post Was Found!'));
+      }
+    }, 200);
+  });
+}
+
+// Find the author details to add the author details in the post object
+function hydrateAuthor(post) {
+  // create a new promise
+  return new Promise((resolve, reject) => {
+    // find the author in authors from the post.author (author.name === post.author)
+    const authorDetails = authors.find(person => person.name === post.author);
+    // When the author is found
+    if(authorDetails) {
+      // "hydrate" the post object with the author object
+      post.author = authorDetails;
+      resolve(post);
+    } else {
+      reject(Error('Can not find the author'));
+    }
+  });
+}
+
+getPostById(1)
+  .then(post => {
+    // whn returning a Promise, it allows to use .then (hydrateAuthor is a Promise)
+    return hydrateAuthor(post);
+  })
+  .then(post => {
+    console.log(post);
+  })
+  .catch(err => {
+    console.error(err);
+  });
+// => {
+//      "title":"I love JavaScript",
+//      "author":{
+//        "name":"Wes Bos",
+//        "twitter":"@wesbos",
+//        "bio":"Canadian Developer"
+//       },
+//      "id":1
+//  };
+
+
+//--------------------------------------------------------------- MULTIPLE INDEPENDANT PROMISES
+
+// Promise.all: fire in the same time no dependencies
+// The Promise.all (iterable) method returns a single Promise
+// - resolves when all of the promises in the iterable argument have resolved
+const weather = new Promise((resolve) => {
+  setTimeout(() => {
+    resolve({ temp: 29, conditions: 'Sunny with Clouds'});
+  }, 2000);
+});
+
+const tweets = new Promise((resolve) => {
+  setTimeout(() => {
+    resolve(['I like cake', 'BBQ is good too!']);
+  }, 500);
+});
+
+Promise
+  // Promise follow the order given but are fired in the same time
+  .all([weather, tweets])
+  .then(responses => {
+    // order is respected hence the deconstructed variables
+    const [weatherInfo, tweetInfo] = responses;
+    console.log(weatherInfo, tweetInfo)
+  });
+
+
+// Promise on proper API with fecth
+const postsPromise = fetch('http://wesbos.com/wp-json/wp/v2/posts');
+const streetCarsPromise = fetch('http://data.ratp.fr/api/datasets/1.0/search/?q=paris');
+
+Promise
+  .all([postsPromise, streetCarsPromise])
+  .then(responses => {
+    // convert to JSON using the map based on the .all
+    return Promise.all(responses.map(res => res.json()))
+  })
+  .then(responses => {
+    console.log(responses);
+  });
+
+
+/*
+  -----------------------------
+  11 - SYMBOLS
+  =>  Symbol is a new primitive type
+  => unique identifier
+  => may be used as an identifier for object properties
+  7 JS data types:
+    PRIMITIVE: (immutable values)
+     - Boolean
+     - Null
+     - Undefined
+     - Number
+     - String
+     - Symbol (new in ECMAScript 2015)
+   NON PRIMITIVE:
+    - Object
   -----------------------------
  */
 
 //--------------------------------------------------------------- SYNTAX
+
+// Pass a descriptor, 'Wes' is not a value
+// corresponds to unique symbol: jjh23g42kh3423kg4b2h34k23jb4kjh2342yk3
+// wes and person are absolutely unique: wes is !== person
+const wes = Symbol('Wes');
+const person = Symbol('Wes');
+
+const classRoom = {
+  [Symbol('Mark')] : { grade: 50, gender: 'male' },
+  // here symbol avoid conflicts between the 2 olivia
+  // and keeps both entries without overwriting
+  [Symbol('olivia')]: { grade: 80, gender: 'female' },
+  [Symbol('olivia')]: { grade: 80, gender: 'female' },
+};
+
+// !!NOTE: Symbols are not iterables
+for (const person in classRoom) {
+  console.log(person); // nothing happens
+}
+
+// To iterate use getOwnPropertySymbols
+const syms = Object.getOwnPropertySymbols(classRoom);
+const data = syms.map(sym => classRoom[sym]);
+console.log(data);
+
+
+/*
+  -----------------------------
+  12 - CLASSES
+  -----------------------------
+ */
+
+//--------------------------------------------------------------- PROTOTYPAL INHERITANCE
+
+// Prototypal inheritance:
+// => when adding a method to the original constructor, it will be inherited by the rest of them
+function Dog(name, breed) {
+  this.name = name;
+  this.breed = breed;
+}
+
+// A method is added to the constructor, the position doesn't matter
+Dog.prototype.bark = function() {
+  console.log(`Bark Bark! My name is ${this.name}`)
+};
+
+const snickers = new Dog('Snickers', 'King Charles');
+const sunny = new Dog('Sunny', 'Golden Doodle');
+
+// The protoype are not part of the actual object but of the __proto
+// .bark is overwritten here
+Dog.prototype.bark = function() {
+  console.log(`Bark Bark🇨🇦🇨🇦🇨🇦! My name is ${this.name} and I'm a ${this.breed}`);
+};
+
+Dog.prototype.cuddle = function() {
+  console.log(`I love you owner!`);
+};
+
+snickers.bark();
+// => Bark Bark! My name is Snickers
+
+
+//--------------------------------------------------------------- CLASSES
+
+// Class expression would be const Dog = class {};
+// => similar to how stick a function inside a variable
+// Class declaration
+class Dog {
+  // !!NOTE: constructor is absolutely required
+  // !!NOTE SYNTAX: so comma separate between methods (constructor/bark/cuddle..)
+  constructor(name, breed) {
+    this.name = name;
+    this.breed = breed;
+  }
+  // call with: snickers.bark()
+  bark() {
+    console.log(`Bark Bark! My name is ${this.name}`)
+  }
+  cuddle() {
+    console.log(`I love you owner!`);
+  }
+  // static method:
+  // think about array.from and array.of
+  // array.from: create an array with all methods
+  // array.of: lives on top of array, every arrays don't have array.og
+  // snickers.info() => Uncaught TypeError: snickers.info is not a function.
+  // => Dog.info() => because it is a static method (not shared)
+  static info() {
+    console.log('A dog is better than a cat by 10 times');
+  }
+  // getter function: return
+  get description() {
+    return `${this.name} is a ${this.breed} type of dog`;
+  }
+  // setter function: write
+  // !!NOTE: call with: snickers.nicknnames = '  Snicky '
+  set nicknames(value) {
+    this.nick = value.trim();
+  }
+  get nicknames() {
+    return this.nick.toUpperCase();
+  }
+}
+
+const snickers = new Dog('Snickers', 'King Charles');
+// call the setter
+snickers.nicknnames = '  Snicky ';
+// call the getter
+// !!NOTE: call with: snickers.nicknames
+// => NOT with snickers.nicknames() (getter function)
+snickers.nicknnames
+// => 'SNIKY'
+const sunny = new Dog('Sunny', 'Golden Doodle');
+
+
+//--------------------------------------------------------------- EXTENDING CLASSES
+
+class Animal {
+  constructor(name) {
+    this.name = name;
+    this.thirst = 100;
+    this.belly = [];
+  }
+  drink() {
+    this.thirst -= 10;
+    return this.thirst;
+  }
+  eat(food) {
+    this.belly.push(food);
+    return this.belly;
+  }
+}
+
+// Extends the Animal class to be more specific (Dog)
+// - do not extend too multiple times to avoid deep complexity
+class Dog extends Animal {
+  constructor(name, breed) {
+    // !!NOTE: super is absolutely required to extend
+    // => means call the thing which is extended
+    // first create an animal and pass name which is required in Animal
+    super(name);
+    this.breed = breed;
+  }
+  bark() {
+    console.log('Bark bark I\'m a dog');
+  }
+}
+
+const rhino = new Animal('Rhiney');
+const snickers = new Dog('Snickers', 'King Charles');
+
+
+//--------------------------------------------------------------- EXTENDING ARRAY
+
+class MovieCollection extends Array {
+  // pass array to the constructor supe (spread operator)
+  constructor(name, ...items) {
+    // super here is waiting for an array (native)
+    // => comparable to new Array(...items) here
+    super(...items);
+    this.name = name;
+  }
+  add(movie) {
+    // !!NOTE: because Array is inherited, this.push can be called
+    // 'this' is an Array
+    this.push(movie);
+  }
+  topRated(limit = 10) {
+    // !!NOTE: because Array is inherited, this.sort can be called
+    // 'this' is an Array
+    return this.sort((a, b) => (a.stars > b.stars ? -1 : 1)).slice(0, limit);
+  }
+}
+
+const movies = new MovieCollection('Wes\'s Fav Movies',
+  { name: 'Bee Movie', stars: 10 },
+  { name: 'Star Wars Trek', stars: 1 },
+  { name: 'Virgin Suicides', stars: 7 },
+  { name: 'King of the Road', stars: 8 }
+);
+
+movies.add({ name: 'Titanic', stars: 5 });
+// !!NOTE:
+//  if calling for (const movie in movies){};
+//    => retieve 5 elements containing the name
+//  CALL for of to skip properties:
+//    => for (const movie of movies){};
+//      => will retieve only the movies as expected
